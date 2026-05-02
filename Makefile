@@ -108,7 +108,22 @@ stop-sonar-server:
 	docker network rm calc-sonar || true
 
 start-sonar-scanner:
-	docker run --rm --network calc-sonar -v "$(CURDIR):/usr/src" sonarsource/sonar-scanner-cli
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════════╗"
+	@echo "║              SONARQUBE — OBTENER TOKEN                      ║"
+	@echo "╠══════════════════════════════════════════════════════════════╣"
+	@echo "║  1. Abre http://localhost:9000                               ║"
+	@echo "║  2. Login: usuario=admin  contraseña=admin                  ║"
+	@echo "║  3. Clic en tu avatar (arriba a la derecha)                 ║"
+	@echo "║  4. My Account → pestaña Security                           ║"
+	@echo "║  5. Generate Token → escribe un nombre → Generate           ║"
+	@echo "║  6. Copia el token (sqa_...)                                ║"
+	@echo "╚══════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@read -p "Pega el token aquí y presiona Enter: " token; \
+	docker run --rm --network calc-sonar -v "$(CURDIR):/usr/src" \
+		-e SONAR_TOKEN=$$token \
+		sonarsource/sonar-scanner-cli
 	@echo ""
 	@echo "✓ Análisis enviado a SonarQube"
 	@echo "  Ver resultados en: http://localhost:9000"
