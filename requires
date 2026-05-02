@@ -1,0 +1,7 @@
+behave==1.2.6
+flask==1.1.2
+pytest==5.4.3
+pytest-cov==2.10.0
+pylint==2.5.3
+junit2html
+python-owasp-zap-v2.4==0.0.17

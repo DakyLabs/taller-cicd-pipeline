@@ -1,0 +1,14 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/calc/add/1/2"
+  },
+  "response": {
+    "status": 200,
+    "body": "3",
+    "headers": {
+        "Content-Type": "text/plain",
+        "Access-Control-Allow-Origin": "*"
+    } 
+  }
+}

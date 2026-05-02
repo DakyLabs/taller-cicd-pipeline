@@ -1,0 +1,16 @@
+[MESSAGES CONTROL]
+disable=missing-module-docstring,missing-function-docstring,missing-class-docstring
+
+[REPORTS]
+msg-template="{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}"
+include-ids=yes
+symbols=yes
+reports=no
+
+[BASIC]
+good-names=e,x,y
+const-rgx=(([a-z_][a-z0-9_]*)|([A-Z_][A-Z0-9_]*)|(__.*__))$
+
+[FORMAT]
+max-line-length=120
+max-module-lines=300

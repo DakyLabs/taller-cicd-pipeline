@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Calculator</title>
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+      integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
+      crossorigin="anonymous"
+    />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="constants.js"></script>
+    <style>
+      html {
+        position: relative;
+      }
+
+      body {
+        background: #ffffff;
+        margin: 0;
+      }
+
+      main {
+        padding: 20px;
+      }
+      .main-column {
+        margin-bottom: 100px;
+      }
+    </style>
+  </head>
+  <body class="d-flex flex-column h-100">
+    <main role="main" class="flex-shrink-0">
+      <div id="calc">
+        <div>
+          Operand 1: <input id="in-op1" v-model="op1" />
+          Operand 2: <input id="in-op2" v-model="op2" />
+        </div>
+        <div>
+          <button id="button-add" v-on:click="add()">+</button>
+          <button id="button-substract" v-on:click="substract()">-</button>
+        </div>
+        <div id="result-area">Result: {{ result  }}</div>
+        <div>
+          History:
+          <ul id="history-log">
+            <li v-for="entry in outputLog">{{ entry }}</li>
+          </ul>
+        </div>
+      </div>
+    </main>
+    <script>
+      
+      var calc = new Vue({
+        el: "#calc",
+        data: {
+          outputLog: [],
+          op1: "1",
+          op2: "2",
+          result: ""
+        },
+        methods: {
+          add: function() {
+            this.apiCall('add', this.op1, this.op2);
+          },
+          substract: function() {
+            this.apiCall('substract', this.op1, this.op2);
+          },
+          apiCall: function(func, op1, op2) {
+            var url = `${baseUrl}/calc/${func}/${op1}/${op2}`;
+            axios
+              .get(url)
+              .then(response => {
+                var entry = `GET ${url} (${response.statusText})`;
+                if (!!response.data) {
+                  entry = entry + ": " + response.data;
+                }
+                this.outputLog.push(entry);
+                this.result = response.data;
+              })
+              .catch(e => {
+                this.outputLog.push(e);
+              });
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

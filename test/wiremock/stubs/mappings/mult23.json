@@ -1,0 +1,14 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/calc/multiply/2/3"
+  },
+  "response": {
+    "status": 200,
+    "body": "6",
+    "headers": {
+        "Content-Type": "text/plain",
+        "Access-Control-Allow-Origin": "*"
+    }
+  }
+}

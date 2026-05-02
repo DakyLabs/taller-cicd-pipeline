@@ -1,0 +1,10 @@
+{
+  "pluginsFile": false,
+  "supportFile": false,
+  "defaultCommandTimeout": 1000,
+  "reporter": "junit",
+  "reporterOptions": {
+    "mochaFile": "/results/cypress_result.xml",
+    "toConsole": false
+  }
+}

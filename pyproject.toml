@@ -1,0 +1,8 @@
+# Settings for black autoformatter (FIXME: we should just use a script with command-line options)
+[tool.black]
+exclude = "/src/(vendor)/"            # --exclude
+fast = true                           # --fast
+line-length = 160                     # -l 160
+skip-string-normalization = true      # -S
+verbose = true                        # -v
+quite = true                          # -q 
