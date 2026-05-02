@@ -201,4 +201,23 @@ jmeter-load:
 	docker stop apiserver || true
 	docker network rm calc-test-jmeter || true
 	@echo ""
-	@echo "✓ Resultados en: results/jmeter/index.html"
+	@echo "✓ Prueba de carga completada."
+	@echo "  Iniciando servidor para ver el reporte..."
+	@lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+	@cd results/jmeter && python3 -m http.server 8888 &
+	@sleep 1
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════╗"
+	@echo "║           REPORTE JMETER DISPONIBLE                 ║"
+	@echo "╠══════════════════════════════════════════════════════╣"
+	@echo "║  Dashboard:       http://localhost:8888              ║"
+	@echo "║  Tiempos:         http://localhost:8888/content/pages/ResponseTimes.html  ║"
+	@echo "║  Throughput:      http://localhost:8888/content/pages/Throughput.html     ║"
+	@echo "║  Over Time:       http://localhost:8888/content/pages/OverTime.html       ║"
+	@echo "╠══════════════════════════════════════════════════════╣"
+	@echo "║  Para detener:  make stop-jmeter-report             ║"
+	@echo "╚══════════════════════════════════════════════════════╝"
+
+stop-jmeter-report:
+	@lsof -ti :8888 | xargs kill -9 2>/dev/null || true
+	@echo "✓ Servidor de reporte JMeter detenido"
