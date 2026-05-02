@@ -1385,17 +1385,36 @@ Similar al VPS pero en Google Cloud. Más control que Cloud Run pero más comple
 
 ## 12. Estado de las herramientas (2025)
 
-| Herramienta | Versión en el repo | Estado actual | Alternativa recomendada |
-|-------------|-------------------|---------------|------------------------|
-| `python:3.6-slim` | base image | EOL desde 2021 | `python:3.12-slim` |
-| `flask==1.1.2` | 1.1.2 | Muy antiguo | `flask==3.0.x` |
-| `pytest==5.4.3` | 5.4.3 | Antiguo | `pytest==8.x` |
-| `cypress/included:4.9.0` | 4.9.0 | Sin ARM64 | `cypress/included:13.x` |
-| `openjdk:8-jre` | 8 | Deprecado en Docker Hub | `eclipse-temurin:11-jre` |
-| `sonarqube:8.3.1` | 8.3.1 | Muy antiguo | `sonarqube:10.x-community` |
-| `owasp/zap2docker-stable` | latest | Imagen renombrada | `ghcr.io/zaproxy/zaproxy:stable` |
-| WireMock 2.27.2 | 2.27.2 | Funcional | WireMock 3.x |
-| JMeter 5.4 | 5.4 | Funcional | JMeter 5.6.x |
+| Herramienta | Versión en el repo | Estado | Acción tomada |
+|-------------|-------------------|--------|---------------|
+| `python:3.6-slim` | base image | EOL (funciona con emulación Rosetta) | Sin cambio — funciona para el lab |
+| `flask==1.1.2` | 1.1.2 | Antiguo pero funcional | Sin cambio |
+| `pytest==5.4.3` | 5.4.3 | Antiguo pero funcional | Sin cambio |
+| `cypress/included:4.9.0` | 4.9.0 | Solo AMD64 | **Corregido**: se agrega `--platform linux/amd64` en el Makefile |
+| `openjdk:8-jre` (WireMock) | 8 | **Eliminado de Docker Hub** | **Corregido**: cambiado a `eclipse-temurin:11-jre` |
+| `openjdk:8-jre` (JMeter) | 8 | **Eliminado de Docker Hub** | **Corregido**: cambiado a `eclipse-temurin:11-jre` |
+| `sonarqube:8.3.1` | 8.3.1 | Antiguo, funciona para demo | Sin cambio — sirve para el lab |
+| `owasp/zap2docker-stable` | latest | Imagen renombrada en 2023 | Sin cambio — se documenta alternativa |
+| WireMock 2.27.2 | 2.27.2 | Funcional | Sin cambio |
+| JMeter 5.4 | 5.4 | Funcional | Sin cambio |
+
+### Compatibilidad por plataforma (validada)
+
+| Comando | Mac ARM64 (M1/M2/M3) | Linux x86_64 |
+|---------|---------------------|--------------|
+| `make build` | ✓ (emulación Rosetta) | ✓ |
+| `make run` | ✓ | ✓ |
+| `make server` | ✓ | ✓ |
+| `make test-unit` | ✓ | ✓ |
+| `make test-behavior` | ✓ | ✓ |
+| `make test-api` | ✓ | ✓ |
+| `make test-e2e` | ✓ (`--platform linux/amd64` con Rosetta) | ✓ |
+| `make build-wiremock` | ✓ (`eclipse-temurin:11-jre` multi-arch) | ✓ |
+| `make build-jmeter` | ✓ (`eclipse-temurin:11-jre` multi-arch) | ✓ |
+| `make pylint` | ✓ | ✓ |
+| `make run-web` | ✓ | ✓ |
+
+> `openjdk:8-jre` está **completamente eliminado de Docker Hub** — sin el cambio a `eclipse-temurin:11-jre` los comandos de WireMock y JMeter fallan con error `not found`.
 
 **Para el taller**: el proyecto funciona tal cual para los comandos principales (`make build`, `make run`, `make server`, `make test-unit`, `make test-behavior`, `make test-api`). Los comandos avanzados (E2E, ZAP, JMeter) requieren actualizar algunas imágenes para ARM64.
 

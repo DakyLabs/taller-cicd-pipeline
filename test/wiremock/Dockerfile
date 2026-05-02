@@ -1,4 +1,4 @@
-FROM openjdk:8-jre
+FROM eclipse-temurin:11-jre
 
 # based on https://github.com/rodolpheche/wiremock-docker/blob/master/Dockerfile
 
