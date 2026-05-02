@@ -2,11 +2,17 @@
 
 build:
 	docker build -t calculator-app .
+	@echo ""
+	@echo "✓ Imagen lista. Siguiente: make run"
 
 run:
 	docker run --rm --volume "$(CURDIR):/opt/calc" --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest python -B app/calc.py
 
 server:
+	@echo "→ API disponible en: http://localhost:5001"
+	@echo "  Endpoints: /calc/add/3/4  /calc/substract/10/3"
+	@echo "  Detener: Ctrl+C"
+	@echo ""
 	docker run --rm --volume "$(CURDIR):/opt/calc" --name apiserver --env PYTHONPATH=/opt/calc --env FLASK_APP=app/api.py -p 5001:5000 -w /opt/calc calculator-app:latest flask run --host=0.0.0.0
 
 interactive:
@@ -16,6 +22,10 @@ test-unit:
 	mkdir -p results
 	docker run --rm --volume "$(CURDIR):/opt/calc" --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest pytest --cov --cov-report=xml:results/coverage.xml --cov-report=html:results/coverage --junit-xml=results/unit_result.xml -m unit || true
 	docker run --rm --volume "$(CURDIR):/opt/calc" --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest junit2html results/unit_result.xml results/unit_result.html
+	@echo ""
+	@echo "✓ Resultados en:"
+	@echo "  results/unit_result.html    → resultados de los tests"
+	@echo "  results/coverage/index.html → cobertura de código"
 
 test-behavior:
 	mkdir -p results
@@ -31,6 +41,8 @@ test-api:
 	docker stop apiserver || true
 	docker rm --force apiserver || true
 	docker network rm calc-test-api
+	@echo ""
+	@echo "✓ Resultados en: results/api_result.html"
 
 test-e2e:
 	mkdir -p results
@@ -46,6 +58,11 @@ test-e2e:
 	docker rm --force calc-web
 	docker run --rm --volume "$(CURDIR):/opt/calc" --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest junit2html results/cypress_result.xml results/cypress_result.html
 	docker network rm calc-test-e2e
+	@echo ""
+	@echo "✓ Resultados en:"
+	@echo "  results/cypress_result.html                → reporte de tests"
+	@echo "  test/e2e/cypress/screenshots/              → capturas de pantalla"
+	@echo "  test/e2e/cypress/videos/calc.spec.js.mp4  → video de la sesión"
 
 test-e2e-wiremock:
 	mkdir -p results
@@ -61,8 +78,17 @@ test-e2e-wiremock:
 	docker rm --force calc-web
 	docker run --rm --volume "$(CURDIR):/opt/calc" --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest junit2html results/cypress_result.xml results/cypress_result.html
 	docker network rm calc-test-e2e-wiremock
+	@echo ""
+	@echo "✓ Resultados en:"
+	@echo "  results/cypress_result.html                → reporte de tests"
+	@echo "  test/e2e/cypress/screenshots/              → capturas de pantalla"
+	@echo "  test/e2e/cypress/videos/calc.spec.js.mp4  → video de la sesión"
 
 run-web:
+	@echo "→ Frontend disponible en: http://localhost"
+	@echo "  Requiere make server corriendo en otra terminal"
+	@echo "  Detener: make stop-web"
+	@echo ""
 	docker run --rm --volume "$(CURDIR)/web/index.html:/usr/share/nginx/html/index.html" --volume "$(CURDIR)/web/constants.local.js:/usr/share/nginx/html/constants.js" --volume "$(CURDIR)/web/nginx.conf:/etc/nginx/conf.d/default.conf" --name calc-web -p 80:80 nginx
 
 stop-web:
@@ -70,7 +96,12 @@ stop-web:
 
 start-sonar-server:
 	docker network create calc-sonar || true
-	docker run -d --rm --stop-timeout 60 --network calc-sonar --name sonarqube-server -p 9000:9000 --volume "$(CURDIR)/sonar/data:/opt/sonarqube/data" --volume "$(CURDIR)/sonar/logs:/opt/sonarqube/logs" sonarqube:8.3.1-community
+	docker run -d --rm --stop-timeout 60 --network calc-sonar --name sonarqube-server -p 9000:9000 --volume "$(CURDIR)/sonar/data:/opt/sonarqube/data" --volume "$(CURDIR)/sonar/logs:/opt/sonarqube/logs" sonarqube:community
+	@echo ""
+	@echo "→ SonarQube disponible en: http://localhost:9000"
+	@echo "  Usuario: admin  |  Contraseña: admin"
+	@echo "  Espera 30-40 segundos antes de abrir el navegador"
+	@echo "  Siguiente: make pylint && make test-unit && make start-sonar-scanner"
 
 stop-sonar-server:
 	docker stop sonarqube-server
@@ -78,16 +109,27 @@ stop-sonar-server:
 
 start-sonar-scanner:
 	docker run --rm --network calc-sonar -v "$(CURDIR):/usr/src" sonarsource/sonar-scanner-cli
+	@echo ""
+	@echo "✓ Análisis enviado a SonarQube"
+	@echo "  Ver resultados en: http://localhost:9000"
 
 pylint:
 	mkdir -p results
 	docker run --rm --volume "$(CURDIR):/opt/calc" --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest pylint app/ | tee results/pylint_result.txt
+	@echo ""
+	@echo "✓ Resultados en: results/pylint_result.txt"
 
 build-wiremock:
 	docker build -t calculator-wiremock -f test/wiremock/Dockerfile test/wiremock/
+	@echo ""
+	@echo "✓ Imagen WireMock lista. Siguiente: make test-e2e-wiremock"
 
 start-wiremock:
 	docker run -d --rm --name calculator-wiremock --volume "$(CURDIR)/test/wiremock/stubs:/home/wiremock" -p 8080:8080 -p 8443:8443 calculator-wiremock
+	@echo ""
+	@echo "→ WireMock disponible en: http://localhost:8080"
+	@echo "  Prueba: curl http://localhost:8080/calc/add/1/2"
+	@echo "  Detener: make stop-wiremock"
 
 stop-wiremock:
 	docker stop calculator-wiremock || true
@@ -108,14 +150,22 @@ zap-scan:
 	docker stop calc-web || true
 	docker stop zap-node || true
 	docker network rm calc-test-zap || true
+	@echo ""
+	@echo "✓ Resultados en: results/sec_result.html"
 
 build-jmeter:
 	docker build -t calculator-jmeter -f test/jmeter/Dockerfile test/jmeter
+	@echo ""
+	@echo "✓ Imagen JMeter lista. Siguiente: make jmeter-load"
 
 start-jmeter-record:
 	docker network create calc-test-jmeter || true
 	docker run -d --rm --network calc-test-jmeter --volume "$(CURDIR):/opt/calc" --name apiserver --network-alias apiserver --env PYTHONPATH=/opt/calc --env FLASK_APP=app/api.py -w /opt/calc calculator-app:latest flask run --host=0.0.0.0
 	docker run -d --rm --network calc-test-jmeter --volume "$(CURDIR)/web/index.html:/usr/share/nginx/html/index.html" --volume "$(CURDIR)/web/constants.test.js:/usr/share/nginx/html/constants.js" --volume "$(CURDIR)/web/nginx.conf:/etc/nginx/conf.d/default.conf" --name calc-web -p 80:80 nginx
+	@echo ""
+	@echo "→ API en: http://localhost:5001"
+	@echo "  Frontend en: http://localhost"
+	@echo "  Detener: make stop-jmeter-record"
 
 stop-jmeter-record:
 	docker stop apiserver || true
@@ -135,3 +185,5 @@ jmeter-load:
 	docker run --rm --network calc-test-jmeter --volume "$(CURDIR):/opt/jmeter" -w /opt/jmeter calculator-jmeter jmeter -n -t test/jmeter/jmeter-plan.jmx -l results/jmeter_results.csv -e -o results/jmeter/
 	docker stop apiserver || true
 	docker network rm calc-test-jmeter || true
+	@echo ""
+	@echo "✓ Resultados en: results/jmeter/index.html"
