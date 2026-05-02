@@ -231,29 +231,496 @@ Dentro de la red, los contenedores se comunican por nombre (`http://apiserver:50
 
 ## 6. El Makefile
 
-El Makefile es el **orquestador central**. Cada target ejecuta comandos Docker específicos.
+El Makefile es el **orquestador central** del proyecto. Cada target es un comando que lanza uno o varios contenedores Docker para realizar una tarea específica. No necesitas instalar Python, Flask ni ninguna herramienta localmente: todo corre dentro de Docker.
 
-### Comandos disponibles
+> **Cómo funciona internamente**: cada comando monta el directorio del proyecto como volumen (`-v`) dentro del contenedor, así el código que editas en tu máquina es el que se ejecuta dentro de Docker sin reconstruir la imagen.
 
-| Comando | Qué hace |
-|---------|----------|
-| `make build` | Construye la imagen Docker `calculator-app` |
-| `make run` | Ejecuta `calc.py` directamente (imprime 4) |
-| `make server` | Levanta el servidor Flask en `localhost:5000` |
-| `make interactive` | Abre una shell bash dentro del contenedor |
-| `make test-unit` | Corre pruebas unitarias con pytest |
-| `make test-behavior` | Corre pruebas BDD con behave |
-| `make test-api` | Corre pruebas de API REST |
-| `make test-e2e` | Corre pruebas E2E con Cypress (Chrome) |
-| `make test-e2e-wiremock` | E2E con backend simulado (WireMock) |
-| `make pylint` | Análisis estático del código |
-| `make run-web` | Levanta el frontend en `localhost:80` |
-| `make build-wiremock` | Construye imagen WireMock |
-| `make zap-scan` | Escaneo de seguridad con OWASP ZAP |
-| `make build-jmeter` | Construye imagen JMeter |
-| `make jmeter-load` | Prueba de carga con JMeter |
-| `make start-sonar-server` | Levanta SonarQube en `localhost:9000` |
-| `make start-sonar-scanner` | Ejecuta el análisis de calidad |
+---
+
+### `make build`
+
+```bash
+docker build -t calculator-app .
+```
+
+**Qué hace**: lee el `Dockerfile` y construye la imagen Docker llamada `calculator-app`. Instala todas las dependencias de Python del archivo `requires`.
+
+**Cuándo usarlo**: la primera vez y cada vez que cambies el `Dockerfile` o el archivo `requires`.
+
+**Importante**: este comando es prerequisito de todos los demás. Sin la imagen construida, nada funciona.
+
+---
+
+### `make run`
+
+```bash
+docker run --rm \
+  --volume "$(CURDIR):/opt/calc" \
+  --env PYTHONPATH=/opt/calc \
+  -w /opt/calc \
+  calculator-app:latest python -B app/calc.py
+```
+
+**Qué hace**: ejecuta directamente el archivo `app/calc.py` dentro de un contenedor. Como `calc.py` tiene al final:
+```python
+if __name__ == "__main__":
+    calc = Calculator()
+    result = calc.add(2, 2)
+    print(result)
+```
+el output esperado es `4`.
+
+**Para qué sirve**: verificación rápida de que la imagen funciona y el código no tiene errores de sintaxis.
+
+**Flags importantes**:
+- `--rm` → borra el contenedor al terminar (no deja basura)
+- `--volume` → monta el código local dentro del contenedor
+- `--env PYTHONPATH=/opt/calc` → permite que Python encuentre el paquete `app`
+- `-w /opt/calc` → establece el directorio de trabajo dentro del contenedor
+
+---
+
+### `make server`
+
+```bash
+docker run --rm \
+  --volume "$(CURDIR):/opt/calc" \
+  --name apiserver \
+  --env PYTHONPATH=/opt/calc \
+  --env FLASK_APP=app/api.py \
+  -p 5000:5000 \
+  -w /opt/calc \
+  calculator-app:latest flask run --host=0.0.0.0
+```
+
+**Qué hace**: levanta el servidor Flask (API REST) y lo expone en `http://localhost:5000`.
+
+**Cómo probarlo** (en otra terminal):
+```bash
+curl http://localhost:5000/               # → Hello from The Calculator!
+curl http://localhost:5000/calc/add/3/4   # → 7
+curl http://localhost:5000/calc/substract/10/3  # → 7
+```
+
+**Flags importantes**:
+- `--name apiserver` → asigna nombre al contenedor (para poder detenerlo con `docker stop apiserver`)
+- `--env FLASK_APP=app/api.py` → le dice a Flask qué archivo es la aplicación
+- `-p 5000:5000` → mapea puerto 5000 del contenedor al puerto 5000 del host
+
+**Nota macOS**: si el puerto 5000 está ocupado por AirPlay Receiver, ver sección 8.
+
+---
+
+### `make interactive`
+
+```bash
+docker run -ti --rm \
+  --volume "$(CURDIR):/opt/calc" \
+  --env PYTHONPATH=/opt/calc \
+  -w /opt/calc \
+  calculator-app:latest bash
+```
+
+**Qué hace**: abre una **terminal bash interactiva** dentro del contenedor. Puedes explorar el entorno, ejecutar Python manualmente, instalar paquetes de forma temporal, etc.
+
+**Para qué sirve**: depuración, exploración, entender qué hay dentro del contenedor.
+
+```bash
+# Dentro del contenedor puedes hacer:
+python -c "from app.calc import Calculator; c = Calculator(); print(c.add(5,3))"
+pip list
+ls /opt/calc
+```
+
+---
+
+### `make test-unit`
+
+```bash
+mkdir -p results
+docker run --rm \
+  --volume "$(CURDIR):/opt/calc" \
+  --env PYTHONPATH=/opt/calc \
+  -w /opt/calc \
+  calculator-app:latest \
+  pytest --cov --cov-report=xml:results/coverage.xml \
+         --cov-report=html:results/coverage \
+         --junit-xml=results/unit_result.xml \
+         -m unit || true
+
+docker run --rm ... junit2html results/unit_result.xml results/unit_result.html
+```
+
+**Qué hace**:
+1. Corre todos los tests marcados con `@pytest.mark.unit` (archivos en `test/unit/`)
+2. Genera reporte de **cobertura de código** en XML y HTML
+3. Genera reporte de resultados en formato JUnit XML
+4. Convierte el XML a HTML legible con `junit2html`
+
+**Artefactos generados**:
+- `results/unit_result.html` → resultados de las pruebas
+- `results/coverage/index.html` → cobertura de código (qué líneas se ejecutaron)
+- `results/coverage.xml` → cobertura en formato para SonarQube
+
+El `|| true` al final hace que el comando de Make no falle si pytest falla (los reportes se generan igual).
+
+---
+
+### `make test-behavior`
+
+```bash
+mkdir -p results
+docker run --rm ... \
+  behave --junit --junit-directory results/ --tags ~@wip test/behavior/
+
+docker run --rm ... bash test/behavior/junit-reports.sh
+```
+
+**Qué hace**:
+1. Ejecuta las pruebas BDD definidas en los archivos `.feature` con la herramienta `behave`
+2. Genera reportes JUnit por cada feature
+3. El script `junit-reports.sh` consolida los reportes
+
+**`--tags ~@wip`**: excluye los escenarios marcados con `@wip` (Work In Progress), que son escenarios incompletos que no deben correr en CI.
+
+**Artefactos generados**: reportes XML en `results/` por cada feature.
+
+---
+
+### `make test-api`
+
+```bash
+mkdir -p results
+docker network create calc-test-api || true
+
+# 1. Lanza el servidor Flask en la red privada
+docker run -d --rm \
+  --volume "$(CURDIR):/opt/calc" \
+  --network calc-test-api \
+  --name apiserver \
+  --env FLASK_APP=app/api.py \
+  -p 5000:5000 \
+  calculator-app:latest flask run --host=0.0.0.0
+
+# 2. Lanza los tests en la misma red
+docker run --rm \
+  --volume "$(CURDIR):/opt/calc" \
+  --network calc-test-api \
+  --env BASE_URL=http://apiserver:5000/ \
+  calculator-app:latest \
+  pytest --junit-xml=results/api_result.xml -m api || true
+
+# 3. Limpieza
+docker stop apiserver || true
+docker network rm calc-test-api
+```
+
+**Qué hace**: orquesta dos contenedores en una red privada para probar la API con peticiones HTTP reales:
+- Contenedor 1: servidor Flask (`apiserver`)
+- Contenedor 2: pytest que hace peticiones a `http://apiserver:5000/`
+
+**Concepto clave**: los dos contenedores se comunican dentro de la red Docker `calc-test-api` usando el nombre del contenedor como hostname. El test sabe la URL del servidor por la variable de entorno `BASE_URL`.
+
+**Artefactos generados**: `results/api_result.html`
+
+---
+
+### `make test-e2e`
+
+```bash
+mkdir -p results
+docker network create calc-test-e2e || true
+
+# 1. Lanza el backend Flask
+docker run -d ... --name apiserver ... flask run --host=0.0.0.0
+
+# 2. Lanza el frontend nginx con constants.test.js
+docker run -d \
+  --volume "$(CURDIR)/web:/usr/share/nginx/html" \
+  --volume "$(CURDIR)/web/constants.test.js:/usr/share/nginx/html/constants.js" \
+  --network calc-test-e2e \
+  --name calc-web -p 80:80 nginx
+
+# 3. Lanza Cypress con Chrome
+docker run --rm \
+  --volume "$(CURDIR)/test/e2e/cypress.json:/cypress.json" \
+  --volume "$(CURDIR)/test/e2e/cypress:/cypress" \
+  --volume "$(CURDIR)/results:/results" \
+  --network calc-test-e2e \
+  cypress/included:4.9.0 --browser chrome || true
+
+# 4. Limpieza y conversión de reporte
+docker rm --force apiserver && docker rm --force calc-web
+docker run ... junit2html results/cypress_result.xml results/cypress_result.html
+docker network rm calc-test-e2e
+```
+
+**Qué hace**: lanza **tres contenedores** en red para simular un usuario real usando el navegador:
+- `apiserver` → backend Python/Flask
+- `calc-web` → frontend nginx sirviendo el HTML/JS
+- Cypress → browser Chrome automatizado que interactúa con el frontend
+
+Cypress abre Chrome, visita `http://calc-web`, escribe en los campos, hace clic en los botones, verifica los resultados y **toma screenshots y videos** de cada test.
+
+**Artefactos generados**:
+- `results/cypress_result.html`
+- `test/e2e/cypress/screenshots/` → capturas de pantalla
+- `test/e2e/cypress/videos/` → grabaciones de video
+
+---
+
+### `make test-e2e-wiremock`
+
+Igual que `test-e2e` pero en lugar de usar el servidor Flask real, usa **WireMock** como backend simulado.
+
+**Para qué sirve**: probar el frontend de forma completamente aislada del backend. Los stubs en `test/wiremock/stubs/mappings/` definen las respuestas predefinidas para cada ruta.
+
+**Prerequisito**: haber corrido `make build-wiremock` antes.
+
+---
+
+### `make run-web`
+
+```bash
+docker run --rm \
+  --volume "$(CURDIR)/web:/usr/share/nginx/html" \
+  --volume "$(CURDIR)/web/constants.local.js:/usr/share/nginx/html/constants.js" \
+  --volume "$(CURDIR)/web/nginx.conf:/etc/nginx/conf.d/default.conf" \
+  --name calc-web -p 80:80 nginx
+```
+
+**Qué hace**: levanta solo el frontend (nginx) en `http://localhost:80` apuntando al backend en `http://localhost:5000` (via `constants.local.js`).
+
+**Para usar en desarrollo**:
+```bash
+# Terminal 1:
+make server   # backend en :5000
+
+# Terminal 2:
+make run-web  # frontend en :80
+# Abre http://localhost en el navegador
+```
+
+---
+
+### `make stop-web`
+
+```bash
+docker stop calc-web
+```
+
+**Qué hace**: detiene el contenedor del frontend. Simple.
+
+---
+
+### `make pylint`
+
+```bash
+mkdir -p results
+docker run --rm ... \
+  pylint app/ | tee results/pylint_result.txt
+```
+
+**Qué hace**: analiza estáticamente el código Python de la carpeta `app/` con Pylint. Detecta errores, malos hábitos, código no utilizado, violaciones de estilo.
+
+**Artefactos generados**: `results/pylint_result.txt` (también lo muestra en consola con `tee`).
+
+**Este archivo es leído por SonarQube** cuando se ejecuta el scanner.
+
+---
+
+### `make build-wiremock`
+
+```bash
+docker build -t calculator-wiremock \
+  -f test/wiremock/Dockerfile test/wiremock/
+```
+
+**Qué hace**: construye la imagen Docker de WireMock a partir del `Dockerfile` en `test/wiremock/`. Descarga el JAR de WireMock y lo empaqueta en una imagen basada en Java.
+
+**Prerequisito** de `make test-e2e-wiremock` y `make start-wiremock`.
+
+---
+
+### `make start-wiremock` / `make stop-wiremock`
+
+```bash
+# start:
+docker run -d --rm --name calculator-wiremock \
+  --volume "$(CURDIR)/test/wiremock/stubs:/home/wiremock" \
+  -p 8080:8080 -p 8443:8443 calculator-wiremock
+
+# stop:
+docker stop calculator-wiremock || true
+```
+
+**Qué hace**: levanta WireMock como servidor standalone en `localhost:8080`. Puedes usarlo para explorar manualmente las respuestas simuladas:
+```bash
+curl http://localhost:8080/calc/add/1/2   # → responde según add12.json
+```
+
+---
+
+### `make start-sonar-server` / `make stop-sonar-server`
+
+```bash
+# start:
+docker network create calc-sonar || true
+docker run -d --rm \
+  --network calc-sonar \
+  --name sonarqube-server \
+  -p 9000:9000 \
+  --volume "$(CURDIR)/sonar/data:/opt/sonarqube/data" \
+  --volume "$(CURDIR)/sonar/logs:/opt/sonarqube/logs" \
+  sonarqube:8.3.1-community
+
+# stop:
+docker stop sonarqube-server
+docker network rm calc-sonar || true
+```
+
+**Qué hace**: levanta un servidor SonarQube completo en `http://localhost:9000`. Los datos se persisten en el directorio `sonar/` local.
+
+**Login por defecto**: usuario `admin`, contraseña `admin`.
+
+**Flujo completo de análisis**:
+```bash
+make start-sonar-server    # esperar ~30 segundos
+make pylint                # genera results/pylint_result.txt
+make test-unit             # genera results/coverage.xml
+make start-sonar-scanner   # envía todo a SonarQube
+# Abre http://localhost:9000 para ver el dashboard
+make stop-sonar-server
+```
+
+---
+
+### `make start-sonar-scanner`
+
+```bash
+docker run --rm \
+  --network calc-sonar \
+  -v "$(CURDIR):/usr/src" \
+  sonarsource/sonar-scanner-cli
+```
+
+**Qué hace**: ejecuta el cliente de SonarQube que analiza el código y envía los resultados al servidor. Lee la configuración de `sonar-project.properties`.
+
+**Prerequisito**: el servidor SonarQube debe estar corriendo (`make start-sonar-server`).
+
+---
+
+### `make zap-scan`
+
+```bash
+mkdir -p results
+docker network create calc-test-zap || true
+
+# 1. Backend Flask
+docker run -d ... --name apiserver ... flask run --host=0.0.0.0
+
+# 2. Frontend nginx
+docker run -d ... --name calc-web ... nginx
+
+# 3. OWASP ZAP en modo daemon
+docker run -d --rm \
+  --network calc-test-zap \
+  --name zap-node \
+  owasp/zap2docker-stable \
+  zap.sh -daemon -host 0.0.0.0 -port 8080 \
+  -config api.key=my_zap_api_key
+
+sleep 10  # esperar a que ZAP inicie
+
+# 4. Test de seguridad via API de ZAP
+docker run --rm ... \
+  pytest --junit-xml=results/sec_result.xml -m security || true
+
+# 5. Limpieza
+docker stop apiserver calc-web zap-node || true
+docker network rm calc-test-zap || true
+```
+
+**Qué hace**: lanza **cuatro contenedores** para hacer un escaneo de seguridad automatizado:
+- `apiserver` → backend
+- `calc-web` → frontend
+- `zap-node` → OWASP ZAP escaneando vulnerabilidades (XSS, inyección, etc.)
+- pytest → orquesta el escaneo via la API REST de ZAP
+
+**Artefactos generados**: `results/sec_result.html`
+
+---
+
+### `make build-jmeter`
+
+```bash
+docker build -t calculator-jmeter \
+  -f test/jmeter/Dockerfile test/jmeter
+```
+
+**Qué hace**: construye la imagen Docker de Apache JMeter. Descarga JMeter 5.4 y lo empaqueta sobre Java.
+
+---
+
+### `make start-jmeter-record` / `make stop-jmeter-record`
+
+**Qué hace**: levanta el backend y el frontend para que puedas usar JMeter en modo de grabación (recording proxy). Te permite grabar las peticiones HTTP que hace un navegador real y convertirlas en un plan de prueba JMeter (`.jmx`).
+
+---
+
+### `make jmeter-load`
+
+```bash
+mkdir -p results
+rm -f results/jmeter_results.csv
+rm -rf results/jmeter/
+docker network create calc-test-jmeter || true
+
+# 1. Lanza el backend
+docker run -d ... --name apiserver ... flask run --host=0.0.0.0
+sleep 5  # espera a que Flask inicie
+
+# 2. Ejecuta el plan de carga
+docker run --rm \
+  --network calc-test-jmeter \
+  --volume "$(CURDIR):/opt/jmeter" \
+  calculator-jmeter \
+  jmeter -n -t test/jmeter/jmeter-plan.jmx \
+    -l results/jmeter_results.csv \
+    -e -o results/jmeter/
+
+docker stop apiserver || true
+docker network rm calc-test-jmeter || true
+```
+
+**Qué hace**: ejecuta el plan de prueba de carga definido en `test/jmeter/jmeter-plan.jmx` contra el backend, simulando múltiples usuarios concurrentes haciendo peticiones.
+
+**Artefactos generados**:
+- `results/jmeter_results.csv` → datos crudos
+- `results/jmeter/index.html` → dashboard HTML con métricas de rendimiento (throughput, tiempos de respuesta, errores)
+
+---
+
+### Resumen visual: qué contenedores usa cada comando
+
+```
+Comando              │ Contenedores que levanta
+─────────────────────┼─────────────────────────────────────────────────────
+make run             │ calculator-app (Python, efímero)
+make server          │ calculator-app (Flask, persiste hasta Ctrl+C)
+make interactive     │ calculator-app (bash, interactivo)
+make test-unit       │ calculator-app × 2 (pytest + junit2html)
+make test-behavior   │ calculator-app × 2 (behave + bash)
+make test-api        │ calculator-app × 3 (apiserver + pytest + junit2html)
+make test-e2e        │ calculator-app + nginx + cypress/included + calculator-app
+make test-e2e-wirem. │ calculator-wiremock + nginx + cypress/included + calculator-app
+make run-web         │ nginx (persiste hasta Ctrl+C)
+make pylint          │ calculator-app (pylint)
+make zap-scan        │ calculator-app + nginx + owasp/zap2docker + calculator-app × 2
+make jmeter-load     │ calculator-app (apiserver) + calculator-jmeter
+make start-sonar-ser │ sonarqube:8.3.1-community (persiste)
+make start-sonar-scan│ sonarsource/sonar-scanner-cli (efímero)
+```
 
 ### Flujo de trabajo básico (inicio rápido)
 
@@ -267,7 +734,7 @@ make run
 
 # 3. Levantar el servidor API
 make server
-# Abre otra terminal y prueba: curl http://localhost:5000/calc/add/3/4
+# En otra terminal: curl http://localhost:5000/calc/add/3/4
 
 # 4. Correr pruebas unitarias
 make test-unit
