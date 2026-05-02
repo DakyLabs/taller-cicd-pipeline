@@ -19,3 +19,6 @@ sonar/
 .scannerwork/
 
 jmeter.log
+
+.DS_Store
+.claude/
